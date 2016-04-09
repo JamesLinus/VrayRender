@@ -5,7 +5,7 @@ bl_info = {
 	"version": (1, 0, 0),
 	"blender": (2, 76, 0),
 	"location": "Tools",
-	"description": "Objects local rotations",
+	"description": "Store 2 render settings: Render dimensions and GI/DMC",
 	"warning": "beta",
 	"wiki_url": "",
 	"category": "",
@@ -38,10 +38,10 @@ def render_settings_store(oldindex, currentindex):
 
 def dmc_import_export(loadsave, index):
 	
-	camname = bpy.context.scene.ObjCam1
-	filename1 = camname + str(index) + "_DMCIS"
+	fname = bpy.context.scene.rendersettingfilename
+	filename1 = fname + str(index) + "_DMCIS"
 	plugin_name1 = 'SettingsImageSampler'
-	filename2 = camname + str(index) + "_DMCSampler"
+	filename2 = fname + str(index) + "_DMCSampler"
 	plugin_name2 = 'SettingsDMCSampler'
 	
 	if loadsave == "load":
@@ -81,20 +81,20 @@ def io_import(fname, dmc):
 			data = json.loads(ofile.read())
 	except:
 		print ("exception")
-	#dmc = 'bpy.context.scene.vray.SettingsImageSampler'
-	#dmc = eval(dmc)
+
 	for i in data:
-		#print (i, data[i])
+
 		if data[i] == "":
-			#print ("None:",i)
-			exec_line = dmc + "." + i +"=" + "''"
+
+			exec_line =  "''"
 		elif type(data[i]) is str :
-			exec_line = dmc + "." + i +"=" + "'" +str(data[i]) + "'"
+
+			exec_line = "'" + str(data[i]) + "'"
 		else:
-			exec_line = dmc + "." + i +"=" + str(data[i])
-			
-		#print (exec_line)
-		exec(exec_line)
+
+			exec_line =  str(data[i])
+
+		setattr(eval(dmc),exec_line,0)
 
 
 def io_export(filename, dmc):
@@ -107,33 +107,28 @@ def io_export(filename, dmc):
 	with open(full_path, 'w') as ofile:
 		
 		my_dict = {}
-		#dmc = 'bpy.context.scene.vray.SettingsImageSampler'
+
 		for x,i in enumerate(items):
-			#print (x,i)
-			j = dmc + "." + i
-			exec(j + "=" + j) 
-		
-		#vrayset = bpy.context.scene.vray.SettingsImageSampler
-		#vrayset = eval(dmc)
+
+			setattr(eval(dmc), i, eval(dmc+'.'+i))
+
 		for x, i in enumerate(items):
 			
 			value = eval(dmc + "." + str(i))
 			if types[x] in('STRING','ENUM'):
-				#print (i, "is", types[x])
-				#print()
 				value = str(value)
 			my_dict[str(i)] = value
 
 		m = json.dumps(my_dict, sort_keys=True, ensure_ascii=False,indent = 4)
 		ofile.write(m)
-		#print ("my_dict:", my_dict)
 
 #-----------------------------------------------------------
 
 #GI import/export
 def presets(loadsave, renderindex):
 
-	preset_name = bpy.context.scene.ObjCam1 + str(renderindex) + "_GI"
+	fname = bpy.context.scene.rendersettingfilename
+	preset_name = fname + "_" + str(renderindex) + "_GI"
 	if loadsave == "load":
 
 		#Read Global illumination preset
@@ -207,7 +202,7 @@ class MenuCopy(bpy.types.Menu):
 			menu = row.operator('exec.rendersettingscopy', text = "Copy current render settings to Cam" +str(i), icon = 'VRAY_LOGO')
 			menu.index = i
 			row = layout.row()
-			
+		row.operator('exec.rendersettingfilename', text = "Set Filename of render settings", icon = 'FILESEL')
 			
 class NodePanel(bpy.types.Panel):
 	bl_label = "Vray Render"
@@ -269,7 +264,31 @@ class NodePanel(bpy.types.Panel):
 		#row.operator('exec.rendersettingsstore', text = "" , icon = 'DOWNARROW_HLT')
 		
 		#DOWNARROW_HLT
-		
+
+
+class Exec_RenderSettingFilename(bpy.types.Operator):
+	"""Tooltip"""
+	bl_idname = "exec.rendersettingfilename"
+	bl_label = "Render settings"
+	bl_options = {'REGISTER', 'UNDO'}
+
+
+	def execute(self, context):
+		self.report({'INFO'}, context.scene.rendersettingfilename)
+		return {'FINISHED'}
+
+	def draw(self, context):
+		layout = self.layout
+		layout.prop(context.scene, 'rendersettingfilename', text = "filename")
+		layout.separator()
+		col = layout.column(align=True)
+		#col.label("of this dialog box to cancel.")
+
+	def invoke(self, context, event):
+
+		return context.window_manager.invoke_props_dialog(self)
+
+
 class Exec_Render(bpy.types.Operator):		
 	"""Render and set camera view with current Render Dimensions/GI/DMC settings"""
 	bl_idname = "exec.render"
@@ -419,7 +438,7 @@ def register():
 	bpy.types.Scene.ObjCam2 = bpy.props.StringProperty(update=ObjCam2_update)
 	bpy.types.Scene.ShowOptions = bpy.props.BoolProperty()
 	bpy.types.Scene.UseCustomLayers = bpy.props.BoolVectorProperty(size = 2, update=use_custom_layers_update)
-	
+	bpy.types.Scene.rendersettingfilename = bpy.props.StringProperty(default = "1")
 	
 
 def unregister():

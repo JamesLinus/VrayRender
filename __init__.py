@@ -122,7 +122,6 @@ def io_export(filename, dmc):
 		m = json.dumps(my_dict, sort_keys=True, ensure_ascii=False,indent = 4)
 		ofile.write(m)
 
-#-----------------------------------------------------------
 
 #GI import/export
 def presets(loadsave, renderindex):

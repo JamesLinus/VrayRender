@@ -202,9 +202,9 @@ class MenuCopy(bpy.types.Menu):
 			menu = row.operator('exec.rendersettingscopy', text = "Copy current render settings to Cam" +str(i), icon = 'VRAY_LOGO')
 			menu.index = i
 			row = layout.row()
-		row.operator('exec.rendersettingload', text = "Load render settings, filename: " + context.scene.rendersettingfilename, icon = 'FILESEL')
+		row.operator('exec.rendersettingload', text = "Load render settings, current filename: " + context.scene.rendersettingfilename, icon = 'FILESEL')
 		row = layout.row()
-		row.operator('exec.rendersettingfilename', text = "Set Filename of render settings", icon = 'FILESEL')
+		row.operator('exec.rendersettingfilename', text = "Set Filename of render settings, current filename: " + context.scene.rendersettingfilename, icon = 'FILESEL')
 			
 class NodePanel(bpy.types.Panel):
 	bl_label = "Vray Render"

@@ -19,7 +19,18 @@ import json
 import os
 from vb30.plugins import PLUGINS_ID
 
+class V():
+	
+	sel_objects = []
+	hide_objects = []
+	hide_objects_drawtype =[]
+	buttonbool = True
 
+def select_objects(objs):
+	
+	bpy.ops.object.select_all(action='DESELECT')
+	for o in objs:
+		o.select = True
 
 def render_settings_store(oldindex, currentindex):
 
@@ -253,18 +264,10 @@ class NodePanel(bpy.types.Panel):
 			col.prop(VRayExporter, 'customRenderLayers', text="")
 			col.operator('exec.customlayersset', icon = 'TRIA_UP')
 		#row.operator('exec.rendersettingsread', icon = 'HAND')
-		#row = layout.row()
-		'''
-		row.prop(context.scene,'ShowOptions', text = "Show Options")
-		if context.scene.ShowOptions:
-			for i in range (1,3):
-				row = layout.row()
-				button = row.operator('exec.rendersettingscopy', text = "Copy current render settings to Cam" +str(i), icon = 'VRAY_LOGO')
-				button.index = i
-		'''
-		#row.operator('exec.rendersettingsstore', text = "" , icon = 'DOWNARROW_HLT')
 		
-		#DOWNARROW_HLT
+		row = layout.row()
+		row.operator('exec.renderhideobjects')
+		row.prop(context.scene, 'Children', "Immediate Children")
 
 class Exec_RenderSettingLoad(bpy.types.Operator):
 	"""Tooltip"""
@@ -440,6 +443,59 @@ def use_custom_layers_update(self, context):
 	Set_Layers(context, context.scene.UseCustomLayers[NodePanel.renderindex-1])
 	
 	pass		
+
+#render selected objects
+class Exec_RenderHideObjects(bpy.types.Operator):		
+	"""Only selected objects are visible when rendering"""
+	bl_idname = "exec.renderhideobjects"
+	bl_label = "Render Selected objects"
+		
+	
+	def execute(self, context):
+		
+		V.sel_objects = context.selected_objects
+		if context.scene.Children:
+			#select also immediate Children objects
+			for o in V.sel_objects:
+				bpy.context.scene.objects.active = o
+				bpy.ops.object.select_grouped(extend=True, type='CHILDREN')
+			V.sel_objects = context.selected_objects
+			
+		bpy.ops.object.select_all(action='INVERT')
+		V.hide_objects = []
+		V.hide_objects_drawtype = []
+		for o in context.selected_objects:
+			if o.hide_render == False and o.type in ('MESH','CURVE','EMPTY'):
+				o.hide_render = True
+				V.hide_objects_drawtype.append(o.draw_type)
+				o.draw_type = 'BOUNDS'
+				V.hide_objects.append(o)
+				print ("object:",o)
+		print()
+		#print ("hided objects:",V.hide_objects)	
+		
+		select_objects(V.sel_objects)
+		V.buttonbool = not V.buttonbool
+		bpy.ops.render.render()
+		Exec_RenderUnHideObjects.execute(self, context)
+		return {'FINISHED'}	
+
+class Exec_RenderUnHideObjects(bpy.types.Operator):		
+	"""Restore objects"""
+	bl_idname = "exec.renderunhideobjects"
+	bl_label = "UnHide Objects"
+	
+	
+	def execute(self, context):
+				
+		for x, o in enumerate(V.hide_objects):
+			o.hide_render = False
+			o.draw_type = V.hide_objects_drawtype[x]
+		select_objects(V.sel_objects)
+		
+		V.buttonbool = not V.buttonbool
+			
+		return {'FINISHED'}	
 	
 #set active camera
 #bpy.context.scene.camera = bpy.context.scene.objects['Camera']
@@ -458,9 +514,12 @@ def register():
 	bpy.types.Scene.UseCustomLayers = bpy.props.BoolVectorProperty(size = 2, update=use_custom_layers_update)
 	bpy.types.Scene.rendersettingfilename = bpy.props.StringProperty(default = "1")
 	
+	bpy.types.Scene.Children = bpy.props.BoolProperty(default = True, description ='Include selected objects immediate childrens')
 
 def unregister():
 	bpy.utils.unregister_module(__name__)
+	
+	del bpy.types.Scene.Children
 	
 
 if __name__ == "__main__":

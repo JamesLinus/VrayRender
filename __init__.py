@@ -269,7 +269,9 @@ class NodePanel(bpy.types.Panel):
 		
 		row = layout.row()
 		row.operator('exec.renderhideobjects', icon = 'RENDER_STILL')
-		row.prop(context.scene, 'Children', "Immediate Children")
+		row = layout.row()
+		row.prop(context.scene, 'Children', "Children Immediate")
+		row.prop(context.scene, 'Parent', "Parent")
 
 class Exec_RenderSettingLoad(bpy.types.Operator):
 	"""Tooltip"""
@@ -456,12 +458,16 @@ class Exec_RenderHideObjects(bpy.types.Operator):
 	def execute(self, context):
 		
 		V.sel_objects = context.selected_objects
-		if context.scene.Children:
-			#select also immediate Children objects
-			for o in V.sel_objects:
+		for o in V.sel_objects:
+			#selected object parent
+			if context.scene.Parent:
+				if o.parent is not None and o.parent.dupli_type is not None:
+					o.parent.select = True
+			if context.scene.Children:
+				#select also immediate Children objects
 				bpy.context.scene.objects.active = o
 				bpy.ops.object.select_grouped(extend=True, type='CHILDREN')
-			V.sel_objects = context.selected_objects
+		V.sel_objects = context.selected_objects
 			
 		bpy.ops.object.select_all(action='INVERT')
 		V.hide_objects = []
@@ -517,11 +523,13 @@ def register():
 	bpy.types.Scene.rendersettingfilename = bpy.props.StringProperty(default = "1")
 	
 	bpy.types.Scene.Children = bpy.props.BoolProperty(default = True, description ='Include selected objects immediate childrens')
+	bpy.types.Scene.Parent = bpy.props.BoolProperty(default = True, description ='Include parent objects if duplication is on')
 
 def unregister():
 	bpy.utils.unregister_module(__name__)
 	
 	del bpy.types.Scene.Children
+	del bpy.types.Scene.Parent
 	
 
 if __name__ == "__main__":

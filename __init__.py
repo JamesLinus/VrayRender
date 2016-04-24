@@ -266,7 +266,7 @@ class NodePanel(bpy.types.Panel):
 		#row.operator('exec.rendersettingsread', icon = 'HAND')
 		
 		row = layout.row()
-		row.operator('exec.renderhideobjects')
+		row.operator('exec.renderhideobjects', icon = 'RENDER_STILL')
 		row.prop(context.scene, 'Children', "Immediate Children")
 
 class Exec_RenderSettingLoad(bpy.types.Operator):

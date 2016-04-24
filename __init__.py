@@ -133,7 +133,7 @@ def io_export(filename, dmc):
 		m = json.dumps(my_dict, sort_keys=True, ensure_ascii=False,indent = 4)
 		ofile.write(m)
 
-
+		
 #GI import/export
 def presets(loadsave, renderindex):
 
@@ -174,10 +174,12 @@ def ObjCam1_update(self, context):
 	
 	context.scene.camera = bpy.context.scene.objects[self.ObjCam1]
 
+	
 def ObjCam2_update(self, context):
 
 	context.scene.camera = bpy.context.scene.objects[self.ObjCam2]
 
+	
 def Set_Active_Camera(context,renderindex):
 	#set active camera
 	cam_name = context.scene.ObjCam1

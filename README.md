@@ -1,3 +1,3 @@
 # VrayRender
 
-![](http://puu.sh/oryD7/b1aec97fce.png)
+![](http://puu.sh/ougHW/b00c24edfc.png)

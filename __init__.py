@@ -19,7 +19,6 @@ import json
 import os
 from vb30.plugins import PLUGINS_ID
 
-
 class V():
 	
 	sel_objects = []

@@ -216,7 +216,7 @@ class MenuCopy(bpy.types.Menu):
 			row = layout.row()
 		row.operator('exec.rendersettingload', text = "Load render settings, current filename: " + context.scene.rendersettingfilename, icon = 'FILESEL')
 		row = layout.row()
-		row.operator('exec.rendersettingfilename', text = "Set Filename of render settings, current filename: " + context.scene.rendersettingfilename, icon = 'FILESEL')
+		row.operator('exec.rendersettingsave', text = "Save render settings, current filename: " + context.scene.rendersettingfilename, icon = 'FILESEL')
 			
 class NodePanel(bpy.types.Panel):
 	bl_label = "Vray Render"
@@ -267,9 +267,10 @@ class NodePanel(bpy.types.Panel):
 			col.operator('exec.customlayersset', icon = 'TRIA_UP')
 		#row.operator('exec.rendersettingsread', icon = 'HAND')
 		
-		row = layout.row()
+		box = layout.box()
+		row = box.row()
 		row.operator('exec.renderhideobjects', icon = 'RENDER_STILL')
-		row = layout.row()
+		row = box.row()
 		row.prop(context.scene, 'Children', "Children Immediate")
 		row.prop(context.scene, 'Parent', "Parent")
 
@@ -288,18 +289,28 @@ class Exec_RenderSettingLoad(bpy.types.Operator):
 		dmc_import_export("load", NodePanel.renderindex)
 		self.report({'INFO'}, "Settings loaded: " + context.scene.rendersettingfilename)
 		return {'FINISHED'}
-
-	
 		
-class Exec_RenderSettingFilename(bpy.types.Operator):
+	def draw(self, context):
+		layout = self.layout
+		layout.prop(context.scene, 'rendersettingfilename', text = "filename")
+		layout.separator()
+		col = layout.column(align=True)
+		#col.label("of this dialog box to cancel.")
+	
+	def invoke(self, context, event):
+
+		return context.window_manager.invoke_props_dialog(self)
+		
+class Exec_RenderSettingSave(bpy.types.Operator):
 	"""Tooltip"""
-	bl_idname = "exec.rendersettingfilename"
+	bl_idname = "exec.rendersettingsave"
 	bl_label = "Render settings"
 	bl_options = {'REGISTER', 'UNDO'}
 
 
 	def execute(self, context):
 		self.report({'INFO'}, context.scene.rendersettingfilename)
+		render_settings_store(0,0)
 		return {'FINISHED'}
 
 	def draw(self, context):
@@ -523,7 +534,7 @@ def register():
 	bpy.types.Scene.rendersettingfilename = bpy.props.StringProperty(default = "1")
 	
 	bpy.types.Scene.Children = bpy.props.BoolProperty(default = True, description ='Include selected objects immediate childrens')
-	bpy.types.Scene.Parent = bpy.props.BoolProperty(default = True, description ='Include parent objects if duplication is on')
+	bpy.types.Scene.Parent = bpy.props.BoolProperty(default = True, description ='Include parent objects if parent duplication is on')
 
 def unregister():
 	bpy.utils.unregister_module(__name__)

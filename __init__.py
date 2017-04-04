@@ -484,9 +484,6 @@ class Exec_RenderHideObjects(bpy.types.Operator):
 		objs_scene = context.scene.objects
 		objs_not_selected = list(set(objs_scene).symmetric_difference(V.sel_objects))
 
-
-
-
 		#
 		#bpy.ops.object.select_all(action='INVERT')
 		V.hide_objects = []

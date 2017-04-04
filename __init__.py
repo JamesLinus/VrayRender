@@ -18,12 +18,12 @@ from bpy.props import IntProperty, BoolProperty, BoolVectorProperty, StringPrope
 import json
 import os
 from vb30.plugins import PLUGINS_ID
+import time
 
 class V():
 	
 	sel_objects = []
 	hide_objects = []
-	hide_objects_drawtype =[]
 	buttonbool = True
 
 def select_objects(objs):
@@ -72,8 +72,8 @@ def config_path_get():
 	
 def plugin_get(plugin_name):
 
-	names =  [i['attr'] for i in PLUGINS_ID[plugin_name].PluginParams ]
-	types =  [i['type'] for i in PLUGINS_ID[plugin_name].PluginParams ]
+	names =	 [i['attr'] for i in PLUGINS_ID[plugin_name].PluginParams ]
+	types =	 [i['type'] for i in PLUGINS_ID[plugin_name].PluginParams ]
 	return names, types
 
 	
@@ -97,13 +97,13 @@ def io_import(fname, dmc):
 
 		if data[i] == "":
 
-			exec_line =  "''"
+			exec_line =	 "''"
 		elif type(data[i]) is str :
 
 			exec_line = "'" + str(data[i]) + "'"
 		else:
 
-			exec_line =  str(data[i])
+			exec_line =	 str(data[i])
 
 		setattr(eval(dmc),exec_line,0)
 
@@ -438,7 +438,7 @@ class Exec_CustomLayersSet(bpy.types.Operator):
 		return {'FINISHED'}		
 		
 class Exec_RenderSettingsCopy(bpy.types.Operator):		
-	"""Copy current render settings"""
+	#"""Copy current render settings"""
 	bl_idname = "exec.rendersettingscopy"
 	bl_label = "Copy current settings to Cam"
 	
@@ -464,7 +464,8 @@ class Exec_RenderHideObjects(bpy.types.Operator):
 	"""Only selected objects are visible when rendering"""
 	bl_idname = "exec.renderhideobjects"
 	bl_label = "Render Selected objects"
-		
+	#bl_description = "Run the script in this slot."
+	bl_options = {'REGISTER', 'UNDO'}  # enable undo for the operator.	
 	
 	def execute(self, context):
 		
@@ -479,18 +480,21 @@ class Exec_RenderHideObjects(bpy.types.Operator):
 				bpy.context.scene.objects.active = o
 				bpy.ops.object.select_grouped(extend=True, type='CHILDREN')
 		V.sel_objects = context.selected_objects
-			
-		bpy.ops.object.select_all(action='INVERT')
+		#
+		objs_scene = context.scene.objects
+		objs_not_selected = list(set(objs_scene).symmetric_difference(V.sel_objects))
+
+
+
+
+		#
+		#bpy.ops.object.select_all(action='INVERT')
 		V.hide_objects = []
-		V.hide_objects_drawtype = []
-		for o in context.selected_objects:
+		for o in objs_not_selected:
 			if o.hide_render == False and o.type in ('MESH','CURVE','EMPTY'):
 				o.hide_render = True
-				V.hide_objects_drawtype.append(o.draw_type)
-				o.draw_type = 'BOUNDS'
 				V.hide_objects.append(o)
-				print ("object:",o)
-		print()
+
 		#print ("hided objects:",V.hide_objects)	
 		
 		select_objects(V.sel_objects)
@@ -509,7 +513,6 @@ class Exec_RenderUnHideObjects(bpy.types.Operator):
 				
 		for x, o in enumerate(V.hide_objects):
 			o.hide_render = False
-			o.draw_type = V.hide_objects_drawtype[x]
 		select_objects(V.sel_objects)
 		
 		V.buttonbool = not V.buttonbool
@@ -522,11 +525,132 @@ class Exec_RenderUnHideObjects(bpy.types.Operator):
 #render
 #bpy.ops.render.render()
 
+###########################################################
+#Show image textures on 3d viewport
+###########################################################
+class Viewport(bpy.types.Operator):
+	bl_idname = "viewport.set"
+	bl_label = "Show textures"
+
+	def execute(self, context):
+		sce = context.scene
+		create_textures(sce.Material_shadeless)
+		return {'FINISHED'}
+
+def Vray_Show_Textures(self, context):
+	
+	
+	layout = self.layout
+	row = layout.row(align=True)
+	row.operator("viewport.set")
+	row.prop(context.scene, "Material_shadeless", "Shadeless")
+
+###############################################################
+def outputnode_search(mat): #return node/None
+	
+	for node in mat.vray.ntree.nodes:
+		print (mat.name, node)
+		if node.bl_idname == 'VRayNodeOutputMaterial' and node.inputs[0].is_linked:
+			return node
+
+	print ("No material output node found")
+	return None
+			
+
+def nodes_iterate(mat, node_type_search = False): #return image/nodeindex/None
+	#node_type_search = True when searching nodetype for proxy save
+
+	nodeoutput = outputnode_search(mat)
+	if nodeoutput is None:
+		return None
+	#print ("Material: ",mat)
+
+	nodelist = []
+	nodelist.append(nodeoutput)
+	nodecounter = 0
+
+	while nodecounter < len(nodelist):
+
+		basenode = nodelist[nodecounter]
+
+		print ("basenode",basenode, mat)
+		#search nodetype
+		if node_type_search:
+			if node_type_check(basenode.vray_plugin):
+				return mat.vray.ntree.nodes.find(basenode.name)
+		#search image texture
+		elif hasattr(basenode, 'vray_plugin') and basenode.vray_plugin in ('TexBitmap','BitmapBuffer'):
+			print ("Mat:",mat.name, "has bitmap texture")
+			print ("basenode.name"	, basenode.name)
+
+			if hasattr(basenode, 'texture'):
+				if hasattr(basenode.texture, 'image'):
+					image = basenode.texture.image
+					print ("image=", image)
+					return image
+
+		inputlist = (i for i in basenode.inputs if i.is_linked)
+
+		for input in inputlist:
+
+			for nlinks in input.links:
+
+				node = nlinks.from_node
+				if node not in nodelist:
+					nodelist.append(node)
+
+		nodecounter +=1
+
+	return None
+
+
+def create_textures(shadeless):
+	#print ("##################################")
+
+	#filter out materials without nodetree
+	materials = [m for m in bpy.data.materials if hasattr(m.vray.ntree, "name")]
+	for mat in materials:
+
+		image = nodes_iterate(mat)
+		
+		#3d viewport 
+		mat.use_shadeless = shadeless
+		mat.use_nodes = False
+		mat.alpha = 0
+		print ("Set material alpha to 0")
+
+		#create image texture
+		#print ("image:",image)
+		if image:
+			#print ("image is not none")
+			#print (mat.name)
+			#create image texture if needed
+			
+			if mat.name in bpy.data.textures:
+				tex = bpy.data.textures[mat.name]
+			else:
+				tex = bpy.data.textures.new(mat.name,'IMAGE')
+
+			tex.image = image
+			tex.type = 'IMAGE'
+			#mat.texture_slots.add()
+			#mat.texture_slots[0].texture  = tex
+			#mat.texture_slots[0].texture.type	= 'IMAGE'
+			#mat.texture_slots[0].texture_coords = 'UV'
+			#mat.texture_slots[0].texture.image = image
+			#mat.add_texture(texture = tex, texture_coordinates = 'UV')
+			mat.texture_slots.clear(0)
+			mat.texture_slots.add()
+			mat.texture_slots[0].texture = tex
+			mat.texture_slots[0].use_map_alpha = True
+
+###############################################################		
 
 def register():
 	
-	bpy.utils.register_module(__name__)
-		
+	#bpy.utils.register_module(__name__)
+	
+	
 	bpy.types.Scene.ObjCam1 = bpy.props.StringProperty(update=ObjCam1_update)
 	bpy.types.Scene.ObjCam2 = bpy.props.StringProperty(update=ObjCam2_update)
 	bpy.types.Scene.ShowOptions = bpy.props.BoolProperty()
@@ -536,12 +660,47 @@ def register():
 	bpy.types.Scene.Children = bpy.props.BoolProperty(default = True, description ='Include selected objects immediate childrens')
 	bpy.types.Scene.Parent = bpy.props.BoolProperty(default = True, description ='Include parent objects if parent duplication is on')
 
+	bpy.utils.register_class(Exec_RenderUnHideObjects)
+	bpy.utils.register_class(Exec_RenderHideObjects)
+	bpy.utils.register_class(Exec_RenderSettingsCopy)
+	bpy.utils.register_class(Exec_CustomLayersSet)
+	bpy.utils.register_class(Exec_RenderSettingsRead)
+	bpy.utils.register_class(Exec_RenderSettingsStore)
+	bpy.utils.register_class(Exec_SetActiveCamera)
+	bpy.utils.register_class(Exec_Render)
+	bpy.utils.register_class(Exec_RenderSettingSave)
+	bpy.utils.register_class(Exec_RenderSettingLoad)
+	bpy.utils.register_class(NodePanel)
+	bpy.utils.register_class(MenuCopy)
+	#bpy.utils.register_class(Exec_RenderHideObjects)
+	#bpy.utils.register_class(Exec_RenderHideObjects)
+	bpy.utils.register_class(Viewport)
+	bpy.types.VRAY_MP_context_material.append(Vray_Show_Textures)
+	bpy.types.Scene.Material_shadeless = bpy.props.BoolProperty(default=True)
+	
 def unregister():
-	bpy.utils.unregister_module(__name__)
+	#bpy.utils.unregister_module(__name__)
+	
 	
 	del bpy.types.Scene.Children
 	del bpy.types.Scene.Parent
 	
-
+	bpy.utils.unregister_class(Exec_RenderUnHideObjects)
+	bpy.utils.unregister_class(Exec_RenderHideObjects)
+	bpy.utils.unregister_class(Exec_RenderSettingsCopy)
+	bpy.utils.unregister_class(Exec_CustomLayersSet)
+	bpy.utils.unregister_class(Exec_RenderSettingsRead)
+	bpy.utils.unregister_class(Exec_RenderSettingsStore)
+	bpy.utils.unregister_class(Exec_SetActiveCamera)
+	bpy.utils.unregister_class(Exec_Render)
+	bpy.utils.unregister_class(Exec_RenderSettingSave)
+	bpy.utils.unregister_class(Exec_RenderSettingLoad)
+	bpy.utils.unregister_class(NodePanel)
+	bpy.utils.unregister_class(MenuCopy)
+	
+	bpy.utils.unregister_class(Viewport)
+	bpy.types.VRAY_MP_context_material.remove(Vray_Show_Textures)
+	del bpy.types.Scene.Material_shadeless
+	
 if __name__ == "__main__":
 	register()
